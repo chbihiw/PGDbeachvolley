@@ -22,13 +22,24 @@
 *{box-sizing:border-box;}
 body{
   margin:0;
-  background:
-    radial-gradient(ellipse at top right, rgba(232,201,125,0.10), transparent 55%),
-    linear-gradient(180deg, var(--sea-deep), #082A2E 100%);
+  background-color: var(--sea-deep);
   color:var(--cream);
   font-family:'Work Sans', sans-serif;
   min-height:100vh;
   padding-bottom:40px;
+}
+.bg-photo{
+  position:fixed; inset:0; z-index:-2;
+  background-image: url('plage-bg.jpg');
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+}
+.bg-overlay{
+  position:fixed; inset:0; z-index:-1;
+  background:
+    linear-gradient(180deg, rgba(11,61,66,0.86), rgba(8,42,46,0.92)),
+    radial-gradient(ellipse at top right, rgba(232,201,125,0.12), transparent 55%);
 }
 h1,h2,.display{
   font-family:'Anton', sans-serif;
@@ -276,6 +287,9 @@ main{max-width:940px; margin:0 auto; padding:32px 20px 0;}
 </head>
 <body>
 
+<div class="bg-photo"></div>
+<div class="bg-overlay"></div>
+
 <div class="config-warning" id="config-warning" style="display:none;">
   ⚠️ Configuration Firebase non renseignée — les données ne seront pas sauvegardées. Remplacez firebaseConfig dans le fichier.
 </div>
@@ -313,7 +327,7 @@ main{max-width:940px; margin:0 auto; padding:32px 20px 0;}
   <section class="panel" id="panel-teams">
     <div class="panel-head"><h2>Équipes</h2><span class="count" id="teams-count">0 équipe</span></div>
 
-    <div class="section-label admin-only" id="pool-label">Joueurs disponibles — sélectionne-en 2 pour former une équipe</div>
+    <div class="section-label admin-only" id="pool-label">Joueurs disponibles — sélectionne-en 2 ou 3 pour créer une équipe, ou 1 seul pour l'ajouter à une équipe existante</div>
     <div class="pool admin-only" id="unassigned-pool"></div>
     <div class="btn-row admin-only">
       <button class="btn btn-primary btn-sm" id="create-team" disabled>Créer l'équipe avec la sélection</button>
@@ -630,19 +644,29 @@ document.getElementById('random-remaining').addEventListener('click', ()=>{
 });
 
 document.getElementById('create-team').addEventListener('click', ()=>{
-  if(manualSelection.length !== 2) return;
+  if(manualSelection.length < 2) return;
   state.teams.push({ id: uid('t'), name: 'Équipe ' + (state.teams.length+1), playerIds: [...manualSelection] });
   manualSelection = [];
   state.bracket = [];
   renderTeams(); renderBracket(); saveState();
 });
 
+function addSelectedPlayerToTeam(teamId){
+  if(manualSelection.length !== 1) return;
+  const t = state.teams.find(x=>x.id===teamId);
+  if(!t) return;
+  t.playerIds.push(manualSelection[0]);
+  manualSelection = [];
+  state.bracket = [];
+  renderTeams(); renderBracket(); saveState();
+}
+
 function toggleManualSelect(pid){
   if(!isAdmin) return;
   const i = manualSelection.indexOf(pid);
   if(i>=0){ manualSelection.splice(i,1); }
   else{
-    if(manualSelection.length>=2) manualSelection.shift();
+    if(manualSelection.length>=3) manualSelection.shift();
     manualSelection.push(pid);
   }
   renderTeams();
@@ -664,17 +688,21 @@ function renderTeams(){
       pool.appendChild(chip);
     });
   }
-  document.getElementById('create-team').disabled = manualSelection.length !== 2;
+  document.getElementById('create-team').disabled = manualSelection.length < 2;
+  document.getElementById('create-team').textContent = manualSelection.length === 3
+    ? "Créer l'équipe à 3 avec la sélection"
+    : "Créer l'équipe avec la sélection";
 
   // Teams list
   const list = document.getElementById('teams-list');
   list.innerHTML = '';
   if(state.teams.length === 0){
-    list.innerHTML = '<div class="empty">Aucune équipe pour l\'instant. Sélectionne 2 joueurs ci-dessus, ou utilise le tirage aléatoire.</div>';
+    list.innerHTML = '<div class="empty">Aucune équipe pour l\'instant. Sélectionne 2 ou 3 joueurs ci-dessus, ou utilise le tirage aléatoire.</div>';
     document.getElementById('teams-count').textContent = '0 équipe';
     return;
   }
   document.getElementById('teams-count').textContent = state.teams.length + ' équipes';
+  const canAddSingle = isAdmin && manualSelection.length === 1;
   state.teams.forEach(t=>{
     const names = t.playerIds.map(id=>{ const p = state.players.find(x=>x.id===id); return p ? p.name : '?'; }).join(' & ');
     const card = document.createElement('div');
@@ -684,11 +712,15 @@ function renderTeams(){
         <input class="t-name" value="${escapeHtml(t.name)}" data-id="${t.id}" ${isAdmin?'':'disabled'}>
         <div class="t-players">${escapeHtml(names)}</div>
       </div>
+      ${canAddSingle ? `<button class="dissolve" data-add="${t.id}" style="border-color:var(--sand); color:var(--sand);">+ Ajouter ici</button>` : ''}
       ${isAdmin ? `<button class="dissolve" data-id="${t.id}">Dissoudre</button>` : ''}
     `;
     list.appendChild(card);
   });
   if(isAdmin){
+    list.querySelectorAll('[data-add]').forEach(btn=>{
+      btn.addEventListener('click', ()=> addSelectedPlayerToTeam(btn.dataset.add));
+    });
     list.querySelectorAll('.t-name').forEach(inp=>{
       inp.addEventListener('change', ()=>{
         const t = state.teams.find(x=>x.id===inp.dataset.id);
