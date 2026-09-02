@@ -566,7 +566,7 @@ function renderPlayers(){
     list.querySelectorAll('input').forEach(inp=>{
       inp.addEventListener('change', ()=>{
         const p = state.players.find(x=>x.id===inp.dataset.id);
-        if(p){ p.name = inp.value; saveState(); }
+        if(p){ p.name = inp.value; renderTeams(); saveState(); }
       });
     });
     list.querySelectorAll('.rm').forEach(btn=>{
