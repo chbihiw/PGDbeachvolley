@@ -122,6 +122,25 @@ main{max-width:940px; margin:0 auto; padding:32px 20px 0;}
   font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--sand-dim);
   border:1px solid var(--sea-line); padding:2px 7px; border-radius:999px; white-space:nowrap;
 }
+.shift-dot{
+  display:inline-block; width:9px; height:9px; border-radius:50%; margin-left:5px; vertical-align:middle;
+}
+.shift-dot.social{background:#4FA8DE;}
+.shift-dot.search{background:#F2C94C;}
+.shift-toggle{display:flex; gap:6px; align-items:center;}
+.shift-btn{
+  width:22px; height:22px; border-radius:50%; cursor:pointer; background:transparent;
+  border:1.5px solid var(--sea-line); flex-shrink:0;
+}
+.shift-btn.social{border-color:#4FA8DE;}
+.shift-btn.social.active{background:#4FA8DE;}
+.shift-btn.search{border-color:#F2C94C;}
+.shift-btn.search.active{background:#F2C94C;}
+.shift-legend{
+  display:flex; gap:18px; align-items:center; font-size:12px; color:var(--cream-dim);
+  margin-bottom:14px; font-family:'Work Sans',sans-serif;
+}
+.shift-legend span{display:flex; align-items:center; gap:6px;}
 
 /* Team pool chips */
 .pool{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
@@ -302,7 +321,7 @@ main{max-width:940px; margin:0 auto; padding:32px 20px 0;}
   <div class="sub">16 joueurs · 8 équipes · phase à élimination directe</div>
   <div class="meta">
     <span>📍 <span style="color:var(--sand)">Plage en face du bureau</span></span>
-    <span>🕔 <span style="color:var(--sand)">18h00</span></span>
+    <span>🕔 <span style="color:var(--sand)">17h00</span></span>
     <span>🧑‍⚖️ Arbitrage : <span style="color:var(--sand)">Team Welfare</span></span>
   </div>
 </header>
@@ -344,6 +363,7 @@ main{max-width:940px; margin:0 auto; padding:32px 20px 0;}
       <button class="btn btn-primary" id="gen-bracket">Générer le tableau (tirage au sort)</button>
       <button class="btn btn-ghost btn-sm" id="clear-bracket">Réinitialiser le tableau</button>
     </div>
+    <div class="shift-legend"><span><span class="shift-dot social"></span> Social</span><span><span class="shift-dot search"></span> Search</span></div>
     <div id="bracket-content"></div>
   </section>
 
@@ -358,7 +378,7 @@ main{max-width:940px; margin:0 auto; padding:32px 20px 0;}
     </div>
     <div class="info-card">
       <h3>Lieu &amp; horaire</h3>
-      <p>Plage en face du bureau Publicis, rendez-vous à 18h00.</p>
+      <p>Plage en face du bureau Publicis, rendez-vous à 17h00.</p>
     </div>
     <div class="info-card">
       <h3>Arbitrage</h3>
@@ -570,9 +590,16 @@ function renderPlayers(){
   state.players.forEach((p, i)=>{
     const row = document.createElement('div');
     row.className = 'player-row';
+    const shiftHtml = isAdmin
+      ? `<div class="shift-toggle">
+          <button class="shift-btn social ${p.shift==='social'?'active':''}" data-id="${p.id}" data-shift="social" title="Social"></button>
+          <button class="shift-btn search ${p.shift==='search'?'active':''}" data-id="${p.id}" data-shift="search" title="Search"></button>
+        </div>`
+      : (p.shift ? `<span class="shift-dot ${p.shift}" title="${p.shift==='social'?'Social':'Search'}"></span>` : '');
     row.innerHTML = `
       <span class="player-num">${String(i+1).padStart(2,'0')}</span>
       <input type="text" value="${escapeHtml(p.name)}" placeholder="Nom du joueur ${i+1}" data-id="${p.id}" ${isAdmin?'':'disabled'}>
+      ${shiftHtml}
       ${isAdmin ? `<button class="rm" data-id="${p.id}" title="Retirer">✕</button>` : ''}
     `;
     list.appendChild(row);
@@ -585,6 +612,14 @@ function renderPlayers(){
       inp.addEventListener('change', ()=>{
         const p = state.players.find(x=>x.id===inp.dataset.id);
         if(p){ p.name = inp.value; renderTeams(); saveState(); }
+      });
+    });
+    list.querySelectorAll('.shift-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const p = state.players.find(x=>x.id===btn.dataset.id);
+        if(!p) return;
+        p.shift = (p.shift === btn.dataset.shift) ? null : btn.dataset.shift;
+        renderPlayers(); renderTeams(); renderBracket(); saveState();
       });
     });
     list.querySelectorAll('.rm').forEach(btn=>{
@@ -703,13 +738,18 @@ function renderTeams(){
   document.getElementById('teams-count').textContent = state.teams.length + ' équipes';
   const canAddSingle = isAdmin && manualSelection.length === 1;
   state.teams.forEach(t=>{
-    const names = t.playerIds.map(id=>{ const p = state.players.find(x=>x.id===id); return p ? p.name : '?'; }).join(' & ');
+    const names = t.playerIds.map(id=>{
+      const p = state.players.find(x=>x.id===id);
+      if(!p) return '?';
+      const dot = p.shift ? `<span class="shift-dot ${p.shift}"></span>` : '';
+      return escapeHtml(p.name) + dot;
+    }).join(' &amp; ');
     const card = document.createElement('div');
     card.className = 'team-card';
     card.innerHTML = `
       <div class="t-main">
         <input class="t-name" value="${escapeHtml(t.name)}" data-id="${t.id}" ${isAdmin?'':'disabled'}>
-        <div class="t-players">${escapeHtml(names)}</div>
+        <div class="t-players">${names}</div>
       </div>
       ${canAddSingle ? `<button class="dissolve" data-add="${t.id}" style="border-color:var(--sand); color:var(--sand);">+ Ajouter ici</button>` : ''}
       ${isAdmin ? `<button class="dissolve" data-id="${t.id}">Dissoudre</button>` : ''}
@@ -763,6 +803,16 @@ document.getElementById('clear-bracket').addEventListener('click', ()=>{
 });
 
 function teamName(id){ if(!id) return null; const t = state.teams.find(x=>x.id===id); return t ? t.name : '?'; }
+
+function teamShiftDots(teamId){
+  if(!teamId) return '';
+  const t = state.teams.find(x=>x.id===teamId);
+  if(!t) return '';
+  return t.playerIds.map(id=>{
+    const p = state.players.find(x=>x.id===id);
+    return (p && p.shift) ? `<span class="shift-dot ${p.shift}" title="${p.shift==='social'?'Social':'Search'}"></span>` : '';
+  }).join('');
+}
 
 function setWinsCount(sets, side){
   return sets.filter(s=>{
@@ -820,11 +870,11 @@ function matchCardHtml(m, i){
     <div class="match-card ${m.round===2 && m.winner ? 'champion':''}" data-mid="${m.id}">
       <div class="match-meta"><span>Match ${i+1}</span>${statusBadge}</div>
       <div class="teams-line">
-        <span class="tname ${m.winner===m.teamA?'winner':(m.winner?'loser':'')}">${nameA || '—'}</span>
+        <span class="tname ${m.winner===m.teamA?'winner':(m.winner?'loser':'')}">${nameA || '—'}${teamShiftDots(m.teamA)}</span>
         <span class="setwins">${ready?winsA:''}</span>
       </div>
       <div class="teams-line">
-        <span class="tname ${m.winner===m.teamB?'winner':(m.winner?'loser':'')}">${nameB || '—'}</span>
+        <span class="tname ${m.winner===m.teamB?'winner':(m.winner?'loser':'')}">${nameB || '—'}${teamShiftDots(m.teamB)}</span>
         <span class="setwins">${ready?winsB:''}</span>
       </div>
       ${bodyHtml}
